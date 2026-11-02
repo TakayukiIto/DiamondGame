@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>名画ダイヤモンドアート</title>
 <style>
 :root{--bg:#f3eee4;--panel:#fffaf0;--ink:#2a2118;--mute:#7a6b58;--line:#d8cbb4;--cv:#ece3d1;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -30,6 +30,23 @@ canvas{display:block;flex:none;margin:auto}
 .pal.off{opacity:.35}
 .note{font-size:11px;color:var(--mute);text-align:center;padding:0 12px 8px}
 button:focus-visible{outline:2px solid #3b7bd8;outline-offset:2px}
+body{height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:hidden;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+button,.tool{touch-action:manipulation}
+#scroll{overscroll-behavior:contain}
+@media (max-width:640px){
+ header{padding:8px 12px 0}
+ h1{font-size:16px}
+ #sub{font-size:12px}
+ .tabs{padding:6px 10px}
+ .tab{padding:7px 12px;min-height:36px}
+ #stage{margin:0 6px;border-radius:10px}
+ .tools{flex-wrap:nowrap;overflow-x:auto;padding:6px 10px 0;justify-content:flex-start;gap:6px}
+ .tool{white-space:nowrap;flex:none;min-height:38px}
+ .pals{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;padding:6px 10px;gap:6px}
+ .pal{flex:none;min-height:44px;padding:4px 10px}
+ .pal i{width:24px;height:24px}
+ .note{display:none}
+}
 </style>
 </head>
 <body>
@@ -156,7 +173,7 @@ function upd(){let left=0;
 function resize(init){
  const r=sc.getBoundingClientRect(),base=Math.max(6,Math.floor(Math.min(r.width/GW,r.height/GH)));
  if(init===true)zoom=base<13?Math.ceil(14/base):1;
- cell=base*zoom;const d=Math.min(devicePixelRatio||1,2);
+ cell=Math.max(4,Math.round(base*zoom));const d=Math.min(devicePixelRatio||1,2);
  cv.style.width=GW*cell+'px';cv.style.height=GH*cell+'px';cv.width=GW*cell*d;cv.height=GH*cell*d;ctx.setTransform(d,0,0,d,0,0);draw()}
 function diamond(x,y,col){
  const c=cell,cx=x*c+c/2,cy=y*c+c/2,r=c/2-c*.06;
@@ -186,9 +203,22 @@ function hit(e){const r=cv.getBoundingClientRect(),x=Math.floor((e.clientX-r.lef
   hitCells.forEach(p=>drawCell(p[0],p[1]))}
  else{flash=[x,y];setTimeout(()=>{flash=null;drawCell(x,y)},350);drawCell(x,y)}
  upd();saveSoon()}
-cv.addEventListener('pointerdown',e=>{if(moveMode)return;drag=true;cv.setPointerCapture(e.pointerId);hit(e)});
-cv.addEventListener('pointermove',e=>{if(drag)hit(e)});
-cv.addEventListener('pointerup',()=>drag=false);
+const ptr=new Map();let pinch=null,pend=null,pendT,pz=null,pr=0;
+const mid=()=>{const [a,b]=[...ptr.values()];return{x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.hypot(a.x-b.x,a.y-b.y)||1}};
+function firePend(){clearTimeout(pendT);if(pend){const e=pend;pend=null;if(ptr.size==1&&!pinch){drag=true;hit(e)}}}
+function applyPinch(){pr=0;if(!pinch||!pz)return;zoom=pz.z;resize();const r=cv.getBoundingClientRect();sc.scrollLeft+=r.left+pinch.fx*cell-pz.x;sc.scrollTop+=r.top+pinch.fy*cell-pz.y}
+cv.addEventListener('pointerdown',e=>{if(moveMode)return;
+ ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});try{cv.setPointerCapture(e.pointerId)}catch(_){}
+ if(ptr.size==2){pend=null;clearTimeout(pendT);drag=false;const m=mid(),r=cv.getBoundingClientRect();pinch={d:m.d,zoom:zoom,fx:(m.x-r.left)/cell,fy:(m.y-r.top)/cell}}
+ else if(ptr.size==1){pend={clientX:e.clientX,clientY:e.clientY};pendT=setTimeout(firePend,70)}});
+cv.addEventListener('pointermove',e=>{
+ if(ptr.has(e.pointerId))ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(pinch&&ptr.size>=2){const m=mid();pz={x:m.x,y:m.y,z:Math.max(1,Math.min(8,pinch.zoom*m.d/pinch.d))};if(!pr)pr=requestAnimationFrame(applyPinch);return}
+ if(pend&&ptr.size==1)firePend();
+ if(drag)hit(e)});
+const endP=e=>{if(ptr.has(e.pointerId)){if(pend&&ptr.size==1)firePend();ptr.delete(e.pointerId)}
+ if(ptr.size<2)pinch=null;if(ptr.size==0)drag=false};
+cv.addEventListener('pointerup',endP);cv.addEventListener('pointercancel',endP);
 document.getElementById('zi').onclick=()=>{zoom=Math.min(6,zoom+1);resize()};
 document.getElementById('zo').onclick=()=>{zoom=Math.max(1,zoom-1);resize()};
 const mv=document.getElementById('mv');
