@@ -171,9 +171,9 @@ function upd(){let left=0;
  document.getElementById('done').style.display=left==0?'flex':'none';
  rem.forEach((r,c)=>{const lim=Math.max(1,Math.floor(tt[c]*.1)),was=c==sel&&old[c]>0&&old[c]<=lim,is=c==sel&&r>0&&r<=lim;if(was!=is)for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)if(!filled[y][x]&&grid[y][x]==c)drawCell(x,y)})}
 function resize(init){
- const r=sc.getBoundingClientRect(),base=Math.max(6,Math.floor(Math.min(r.width/GW,r.height/GH)));
- if(init===true)zoom=base<13?Math.ceil(14/base):1;
- cell=Math.max(4,Math.round(base*zoom));const d=Math.min(devicePixelRatio||1,2);
+ const r=sc.getBoundingClientRect(),base=Math.min((r.width-2)/GW,(r.height-2)/GH);
+ if(init===true)zoom=1;
+ cell=Math.max(2,Math.floor(base*zoom+1e-6));const d=Math.min(devicePixelRatio||1,2);
  cv.style.width=GW*cell+'px';cv.style.height=GH*cell+'px';cv.width=GW*cell*d;cv.height=GH*cell*d;ctx.setTransform(d,0,0,d,0,0);draw()}
 function diamond(x,y,col){
  const c=cell,cx=x*c+c/2,cy=y*c+c/2,r=c/2-c*.06;
