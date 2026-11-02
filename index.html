@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>名画ダイヤモンドアート</title>
+<style>
+:root{--bg:#f3eee4;--panel:#fffaf0;--ink:#2a2118;--mute:#7a6b58;--line:#d8cbb4;--cv:#ece3d1;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17130f;--panel:#241d16;--ink:#f1e8d8;--mute:#a8987f;--line:#3d3226;--cv:#1d1812}}
+:root[data-theme="dark"]{--bg:#17130f;--panel:#241d16;--ink:#f1e8d8;--mute:#a8987f;--line:#3d3226;--cv:#1d1812}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;display:flex;flex-direction:column}
+header{padding:10px 14px 2px}
+h1{font-size:18px;margin:0;font-weight:700}
+#sub{font-size:13px;color:var(--mute);margin-top:2px;min-height:18px}
+.tabs{display:flex;gap:6px;padding:8px 12px;overflow-x:auto}
+.tab,.pal,.tool{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.tab{padding:6px 12px;font-size:13px;white-space:nowrap}
+.tab[aria-pressed="true"],.pal[aria-pressed="true"],.tool[aria-pressed="true"]{border-color:var(--ink);border-width:2px}
+#stage{flex:1;min-height:0;margin:0 10px;border-radius:12px;background:var(--cv);border:1px solid var(--line);position:relative}
+#scroll{position:absolute;inset:0;overflow:auto;display:flex;border-radius:12px}
+canvas{display:block;flex:none;margin:auto}
+#done{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:none}
+#done span{background:var(--panel);border:1px solid var(--ink);border-radius:12px;padding:10px 18px;font-weight:700}
+.tools{display:flex;gap:6px;padding:8px 12px 0;justify-content:center}
+.tool{padding:6px 14px;font-size:13px}
+.pals{display:flex;gap:6px;padding:8px 12px;justify-content:center;flex-wrap:wrap}
+.pal{display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px}
+.pal i{width:18px;height:18px;border-radius:5px;display:inline-block}
+.pal.off{opacity:.35}
+.note{font-size:11px;color:var(--mute);text-align:center;padding:0 12px 8px}
+button:focus-visible{outline:2px solid #3b7bd8;outline-offset:2px}
+</style>
+</head>
+<body>
+<header><h1>名画ダイヤモンドアート</h1><div id="sub"></div></header>
+<div class="tabs" id="tabs"></div>
+<div id="stage"><div id="scroll"><canvas id="c"></canvas></div><div id="done"><span>完成! きらめく一枚になりました</span></div></div>
+<div class="tools"><button class="tool" id="zo" aria-label="縮小">－</button><button class="tool" id="zi" aria-label="拡大">＋</button><button class="tool" id="mv" aria-pressed="false">移動モード</button></div>
+<div class="tools"><label class="tool">画像から作る(12色・長辺80マス)<input id="file" type="file" accept="image/*" hidden></label><button class="tool" id="rs">最初からやり直す（2回押すとやり直し）</button><button class="tool" id="dl" hidden>この図案を削除（2回押すと削除）</button></div>
+<div class="pals" id="pals" role="group" aria-label="ダイヤの色"></div>
+<div class="note">内蔵の図案は名画をモチーフにした簡略版です。「画像から作る」で名画の画像を読み込むと、元の絵に近い図案を作れます。同じ番号のマスをタップ・なぞって埋めよう。拡大して移動したいときは「移動モード」へ。</div>
+<script>
+let GW=80,GH=60;const dist=(x,y,a,b)=>Math.hypot(x-a,y-b);
+const seg=(x,y,a,b,c,d)=>{const dx=c-a,dy=d-b,t=Math.max(0,Math.min(1,((x-a)*dx+(y-b)*dy)/(dx*dx+dy*dy)));return dist(x,y,a+dx*t,b+dy*t)};
+const ell=(x,y,a,b,rx,ry)=>((x-a)/rx)**2+((y-b)/ry)**2;
+const ART=[
+{name:"星月夜",artist:"ゴッホ風",pal:["#14204f","#25418a","#4f7fc4","#8fb8e6","#f5d442","#f4ecb0","#16352c","#3b5a3a"],
+ f(u,v){
+  const hill=10.2+Math.sin(u*.7)*.7+Math.sin(u*1.9)*.2;
+  if(v>hill){
+   if(v>11.4&&v<12.8&&u>7&&Math.floor(u*2)%3!=2){return (Math.floor(u*5)*7+Math.floor(v*5)*3)%5==0?4:0}
+   if(Math.abs(u-12.6)<.35&&v<hill+2)return 0;
+   return (u*2+v*2)%2<1?(v>13?7:1):6}
+  if(Math.abs(u-12.6)<.3-(11-v)*.0&&v>8.4)return 0;
+  const cw=1.15*Math.pow(Math.max(0,Math.sin(Math.PI*(v-2)/11)),.7)+.2+Math.sin(v*2.2)*.18;
+  if(v>2&&v<hill+1&&Math.abs(u-3.2)<cw)return Math.sin(u*5+v*3)>.3?7:6;
+  const m=dist(u,v,16,3);
+  if(m<1.4)return 4; if(m<2.4)return Math.sin(m*9)>0?5:3;
+  for(const s of [[8,1.2],[11,2.4],[6,5.2],[9.5,6.5],[18.5,7],[1,1.5],[13.5,1],[19,5]]){const d=dist(u,v,s[0],s[1]);if(d<.45)return 4;if(d<.85)return 5}
+  for(const c of [[7,4.5],[12,5.2]]){const dx=u-c[0],dy=v-c[1],d=Math.hypot(dx,dy);if(d<2.6){return Math.sin(Math.atan2(dy,dx)*2-d*2.2)>0?3:1}}
+  const w=Math.sin(u*.7+Math.sin(v*.8)*2)+Math.cos(v*.9-u*.25);
+  return w<-.9?0:w<-.2?1:w<.5?2:3}},
+{name:"神奈川沖浪裏",artist:"北斎風",pal:["#efe3c2","#1c3b6e","#3f74b5","#a9cfe6","#fbfaf5","#8a7a5a","#d9c79a","#2a5a9a"],
+ f(u,v){
+  const d=dist(u,v,6,9.8),h=dist(u,v,8.3,10.4);
+  if(v<12.8&&d<6.3){
+   if(h<3.1&&v<11.4)return h<2?3:7;
+   if(d>5.5)return v<9.5?4:7;
+   return [1,7,2][Math.floor(d*2.2)%3]}
+  for(let a=-1.9;a<-.3;a+=.28){const x=6+Math.cos(a)*6.4,y=9.8+Math.sin(a)*6.4;if(dist(u,v,x+.35,y-.35)<.55&&u>7)return 4}
+  const hor=10.6+Math.sin(u*1.3)*.4;
+  if(v>=hor)return Math.floor(u*2+v*3)%2?1:7;
+  if(v>=7.4&&Math.abs(u-15)<=(v-7.4)*1.4+.2)return v<8.6?4:(Math.floor(v*2)%2?2:7);
+  if(v<5&&Math.sin(u*.8+v*2.2)>.55)return 6;
+  if(v>9.8&&dist(u,v,17.5,9.3)<.4)return 5;
+  return 0}},
+{name:"睡蓮",artist:"モネ風",pal:["#2f6f84","#4f96a2","#8cc7b5","#e88fb4","#2f5f4a","#b9a4e0","#4b8f5f","#f5d9e6"],
+ f(u,v){
+  for(const f of [[5,3.3],[12.2,8.2],[13.2,8.8],[16,3.2],[7.2,10.6],[3,11]]){const d=dist(u,v,f[0],f[1]);if(d<.4)return 7;if(d<.85)return 3}
+  for(const p of [[4.5,4,2.8,1.6],[12.5,9,3.3,1.9],[16,3.4,2.3,1.4],[7,11,2.9,1.6],[2.5,12,1.8,1.1],[18,12.3,1.8,1]]){
+   const e=ell(u,v,p[0],p[1],p[2],p[3]);
+   if(e<1){if(Math.abs(v-p[1])<.2&&u>p[0])return 0;return e<.35?6:4}}
+  const w=Math.sin(u*.9+v*.5)+Math.cos(v*1.3-u*.4)+Math.sin(u*.3+v*2.1)*.5;
+  return w>1.1?2:w>.4?1:w>-.4?0:w>-1?5:0}},
+{name:"ひまわり",artist:"ゴッホ風",pal:["#e3c86a","#3b6f8f","#ffd34d","#e89a00","#5a3a1a","#6a8a3a","#b8863a","#6aa0c0"],
+ f(u,v){
+  const F=[[4.5,4,2.4],[9.5,2.8,2.5],[15,4.3,2.4],[7,7.2,1.9],[12.2,7.4,1.9]];
+  for(const [a,b,r] of F){const d=dist(u,v,a,b);if(d<r){if(d<r*.38)return Math.sin(d*14)>.4?3:4;const k=Math.floor(Math.atan2(v-b,u-a)*5/Math.PI+10)%2;return d>r*.72?(k?2:3):(k?3:2)}}
+  if(v>=12.7)return Math.sin(u*2+v)>.7?3:6;
+  const vw=1.5+Math.sin((v-9.4)/3.3*Math.PI)*.5;
+  if(v>=9.4&&v<12.7&&Math.abs(u-9.5)<vw)return u<8.4&&v>10&&v<12?7:1;
+  for(const [a,b] of F){if(seg(u,v,a,b,9.5,9.8)<.26)return 5}
+  for(const l of [[6.2,9,1.4,.7],[13,9,1.5,.7],[7.5,8.4,1,.5],[11.8,8.3,1.1,.5]]){if(ell(u,v,l[0],l[1],l[2],l[3])<1)return 5}
+  return Math.sin(u*.8+v*.3)>.75?6:0}},
+{name:"真珠の少女",artist:"フェルメール風",pal:["#14110f","#2a2018","#f0c9a4","#d9a47c","#a86f4f","#3f6fb0","#274a82","#e0a63a","#b57a1e","#b8564a","#3a2418","#f6f1e6"],
+ f(u,v){
+  const fe=ell(u,v,9,7.2,2.6,3.4);
+  if(ell(u,v,8,7,.55,.24)<1||ell(u,v,10.5,7,.5,.22)<1)return 10;
+  if(ell(u,v,8,6.5,.9,.14)<1||ell(u,v,10.5,6.45,.85,.14)<1)return 10;
+  if(ell(u,v,9.3,9.5,.8,.2)<1)return 9;
+  if(ell(u,v,9.3,9.1,.6,.15)<1||ell(u,v,9.4,8.2,.35,.5)<1)return 4;
+  if(dist(u,v,8.3,10.9)<.55)return 11;
+  if(ell(u,v,9,4.2,3.2,2.7)<1&&v<5.6)return Math.sin(u*2.4+v*1.5)>.4?6:5;
+  if(fe<1){const t=(u-9)/2.6;return t<-.2?2:t<.35?3:4}
+  const tx=11.6+(v-5)*.18;
+  if(v>4.8&&v<11.8&&Math.abs(u-tx)<1.15)return Math.sin(v*2.5+u)>.3?8:7;
+  if(u>8&&u<10.4&&v>=10&&v<12.2)return u<8.9?3:4;
+  if(v>=11.8&&ell(u,v,9.4,15.5,6.2,4)<1)return Math.sin(u*1.6+v*2)>.5?8:7;
+  const d=dist(u,v,9,7);
+  return d>5.2?0:(d>4.2&&Math.floor(u*4+v*4)%2?0:1)}},
+{name:"モナ・リザ",artist:"ダ・ヴィンチ風",pal:["#1d1a14","#8da593","#bfc9a8","#6f6a45","#4a4a32","#e8c08e","#c8935f","#8f5d38","#2b1d12","#a07a2b","#3b4a2f","#f4e3bd"],
+ f(u,v){
+  const fe=ell(u,v,10,5.5,2.1,2.7);
+  if(ell(u,v,8.9,5.1,.45,.17)<1||ell(u,v,11.1,5.1,.45,.17)<1)return 8;
+  if(ell(u,v,10,7.1,.75,.13)<1||ell(u,v,10,6.3,.3,.5)<1)return 7;
+  if(ell(u,v,9.7,3.9,.8,.35)<1)return 11;
+  if(fe<1){const t=(u-10)/2.1;return t<-.3?5:t<.4?6:7}
+  if(ell(u,v,10,5.8,3.1,3.7)<1)return 8;
+  if(Math.abs(u-10)<3.7&&Math.abs(u-10)>2.1&&v>5&&v<10)return 8;
+  if(Math.abs(u-10)<1.1&&v>=8&&v<9.6)return u<10?6:7;
+  if(v>=9.4&&v<11.2&&Math.abs(u-10)<2.3-(v-9.4)*.9)return v<10.4?5:6;
+  if(v>=9.2&&ell(u,v,10,14,6.2,5.5)<1){
+   if(ell(u,v,10,13.2,2,.9)<1)return u<10?5:6;
+   if(ell(u,v,6.2,12.6,2.4,2.4)<1||ell(u,v,13.8,12.6,2.4,2.4)<1)return Math.sin(v*3+u)>.5?0:9;
+   return Math.sin(u*2.1+v*1.3)>.55?0:10}
+  const h=6.8+Math.sin(u*.9)*.7+Math.sin(u*.3)*.5;
+  if(v>h){if(u>2&&u<4.5&&v>7.4&&v<9)return 1;return Math.floor(u*3+v*2)%3==0?4:3}
+  return v<3.5?1:(v<5.5?(Math.floor(u*4+v*4)%2?1:2):2)}}
+];
+const cv=document.getElementById('c'),ctx=cv.getContext('2d'),sc=document.getElementById('scroll');
+let tt=[],rem=[],hl='#ff00ff',cur=0,sel=0,grid=[],filled=[],cell=14,zoom=1,drag=false,flash=null,moveMode=false;
+function load(i){cur=i;sel=0;const a=ART[i];grid=[];filled=[];
+ if(a.g){GW=a.gw;GH=a.gh;for(let y=0;y<GH;y++){grid.push(a.g[y].slice());filled.push(new Array(GW).fill(false))}}
+ else{GW=80;GH=60;for(let y=0;y<GH;y++){grid.push([]);filled.push([]);for(let x=0;x<GW;x++){grid[y].push(a.f((x+.5)*20/GW,(y+.5)*15/GH));filled[y].push(false)}}}
+ const sv=DB.prog[a.id||a.name];if(sv&&sv.length==GW*GH)for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)filled[y][x]=sv[y*GW+x]=='1';
+ DB.last=a.id||a.name;persist();document.getElementById('dl').hidden=!a.id;
+ document.querySelectorAll('.tab').forEach((t,j)=>t.setAttribute('aria-pressed',j==i));buildPal();resize(true)}
+const tabs=document.getElementById('tabs');
+const addTab=i=>{const b=document.createElement('button');b.className='tab';b.textContent=ART[i].name;b.onclick=()=>load(i);tabs.appendChild(b);return b};
+ART.forEach((a,i)=>addTab(i));
+function remain(c){let n=0;for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)if(grid[y][x]==c&&!filled[y][x])n++;return n}
+function buildPal(){const p=document.getElementById('pals');p.innerHTML='';
+ const P=ART[cur].pal,tot=P.map((_,i)=>remain(i));tt=tot;
+ const rgb=h=>[1,3,5].map(k=>parseInt(h.slice(k,k+2),16));let bd=-1;
+ for(const c of ['#ff00ff','#00e5ff','#ff1744','#39ff14','#ffee00','#ff6d00']){const a=rgb(c),m=Math.min(...P.map(p=>{const b=rgb(p);return Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2])}));if(m>bd){bd=m;hl=c}}
+ P.map((_,i)=>i).sort((a,b)=>tot[a]-tot[b]||a-b).forEach(i=>{const col=P[i],b=document.createElement('button');b.className='pal';b.dataset.i=i;b.innerHTML=`<i style="background:${col}"></i>${i+1} <small></small>`;b.onclick=()=>{sel=i;upd();draw()};p.appendChild(b)});upd()}
+function upd(){let left=0;
+ const old=rem;rem=ART[cur].pal.map(()=>0);for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)if(!filled[y][x])rem[grid[y][x]]++;
+ document.querySelectorAll('.pal').forEach(b=>{const i=+b.dataset.i,r=remain(i);b.setAttribute('aria-pressed',i==sel);b.classList.toggle('off',r==0);b.querySelector('small').textContent='残'+r});
+ for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)if(!filled[y][x])left++;
+ const pct=Math.floor((GW*GH-left)/(GW*GH)*100);
+ document.getElementById('sub').textContent=`${ART[cur].artist}「${ART[cur].name}」 完成度 ${pct}%(${GW}×${GH}マス)`;
+ document.getElementById('done').style.display=left==0?'flex':'none';
+ rem.forEach((r,c)=>{const lim=Math.max(1,Math.floor(tt[c]*.1)),was=c==sel&&old[c]>0&&old[c]<=lim,is=c==sel&&r>0&&r<=lim;if(was!=is)for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)if(!filled[y][x]&&grid[y][x]==c)drawCell(x,y)})}
+function resize(init){
+ const r=sc.getBoundingClientRect(),base=Math.max(6,Math.floor(Math.min(r.width/GW,r.height/GH)));
+ if(init===true)zoom=base<13?Math.ceil(14/base):1;
+ cell=base*zoom;const d=Math.min(devicePixelRatio||1,2);
+ cv.style.width=GW*cell+'px';cv.style.height=GH*cell+'px';cv.width=GW*cell*d;cv.height=GH*cell*d;ctx.setTransform(d,0,0,d,0,0);draw()}
+function diamond(x,y,col){
+ const c=cell,cx=x*c+c/2,cy=y*c+c/2,r=c/2-c*.06;
+ const P=[[0,-1],[.7,-.7],[1,0],[.7,.7],[0,1],[-.7,.7],[-1,0],[-.7,-.7]];
+ ctx.beginPath();P.forEach((p,i)=>{const X=cx+p[0]*r,Y=cy+p[1]*r;i?ctx.lineTo(X,Y):ctx.moveTo(X,Y)});ctx.closePath();ctx.fillStyle=col;ctx.fill();
+ ctx.fillStyle='rgba(255,255,255,.38)';ctx.beginPath();ctx.moveTo(cx-r*.7,cy-r*.7);ctx.lineTo(cx,cy-r);ctx.lineTo(cx+r*.7,cy-r*.7);ctx.lineTo(cx,cy);ctx.closePath();ctx.fill();
+ ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();ctx.moveTo(cx-r*.7,cy+r*.7);ctx.lineTo(cx,cy+r);ctx.lineTo(cx+r*.7,cy+r*.7);ctx.lineTo(cx,cy);ctx.closePath();ctx.fill();
+ ctx.fillStyle='rgba(255,255,255,.9)';ctx.beginPath();ctx.arc(cx-r*.32,cy-r*.38,Math.max(.6,r*.1),0,7);ctx.fill()}
+function drawCell(x,y,full){
+ const pal=ART[cur].pal,c=grid[y][x],px=x*cell,py=y*cell;
+ if(!full)ctx.clearRect(px,py,cell,cell);
+ if(filled[y][x]){diamond(x,y,pal[c]);return}
+ const low=c==sel&&rem[c]>0&&rem[c]<=Math.max(1,Math.floor(tt[c]*.1));
+ ctx.fillStyle=low?hl:c==sel?pal[c]+'88':'rgba(128,110,85,.12)';ctx.fillRect(px+1,py+1,cell-2,cell-2);
+ if(flash&&flash[0]==x&&flash[1]==y){ctx.strokeStyle='#d33';ctx.lineWidth=2;ctx.strokeRect(px+2,py+2,cell-4,cell-4)}
+ if(cell>=13){ctx.fillStyle=low||c==sel?'#111':'rgba(128,110,85,.85)';ctx.fillText(c+1,px+cell/2,py+cell/2+1)}}
+function draw(){
+ ctx.clearRect(0,0,GW*cell,GH*cell);
+ ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`600 ${Math.floor(cell*.5)}px sans-serif`;
+ for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)drawCell(x,y,true)}
+function hit(e){const r=cv.getBoundingClientRect(),x=Math.floor((e.clientX-r.left)/cell),y=Math.floor((e.clientY-r.top)/cell);
+ if(x<0||y<0||x>=GW||y>=GH||filled[y][x])return;
+ if(grid[y][x]==sel){flash=null;const st=[[x,y]];filled[y][x]=true;const hitCells=[];
+  while(st.length){const [cx,cy]=st.pop();hitCells.push([cx,cy]);
+   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=cx+dx,ny=cy+dy;
+    if(nx>=0&&ny>=0&&nx<GW&&ny<GH&&!filled[ny][nx]&&grid[ny][nx]==sel){filled[ny][nx]=true;st.push([nx,ny])}}}
+  hitCells.forEach(p=>drawCell(p[0],p[1]))}
+ else{flash=[x,y];setTimeout(()=>{flash=null;drawCell(x,y)},350);drawCell(x,y)}
+ upd();saveSoon()}
+cv.addEventListener('pointerdown',e=>{if(moveMode)return;drag=true;cv.setPointerCapture(e.pointerId);hit(e)});
+cv.addEventListener('pointermove',e=>{if(drag)hit(e)});
+cv.addEventListener('pointerup',()=>drag=false);
+document.getElementById('zi').onclick=()=>{zoom=Math.min(6,zoom+1);resize()};
+document.getElementById('zo').onclick=()=>{zoom=Math.max(1,zoom-1);resize()};
+const mv=document.getElementById('mv');
+mv.onclick=()=>{moveMode=!moveMode;mv.setAttribute('aria-pressed',moveMode);mv.textContent=moveMode?'置くモードへ':'移動モード';cv.style.touchAction=moveMode?'pan-x pan-y':'none'};
+cv.style.touchAction='none';
+addEventListener('resize',()=>resize());
+function smooth(g,w,h,min){
+ if(!min)return;
+ for(let pass=0;pass<3;pass++){const seen=new Uint8Array(w*h);let ch=false;
+  for(let s=0;s<w*h;s++){if(seen[s])continue;
+   const lab=g[(s/w)|0][s%w],comp=[s],st=[s];seen[s]=1;
+   while(st.length){const p=st.pop(),px=p%w,py=(p/w)|0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=px+dx,ny=py+dy;if(nx<0||ny<0||nx>=w||ny>=h)continue;const q=ny*w+nx;if(!seen[q]&&g[ny][nx]==lab){seen[q]=1;comp.push(q);st.push(q)}}}
+   if(comp.length<min){const cnt={};
+    for(const p of comp){const px=p%w,py=(p/w)|0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=px+dx,ny=py+dy;if(nx<0||ny<0||nx>=w||ny>=h)continue;const l=g[ny][nx];if(l!=lab)cnt[l]=(cnt[l]||0)+1}}
+    let b=-1,bc=0;for(const l in cnt)if(cnt[l]>bc){bc=cnt[l];b=+l}
+    if(b>=0){for(const p of comp)g[(p/w)|0][p%w]=b;ch=true}}}
+  if(!ch)break}}
+function quant(px,n,k){
+ const P=[];for(let i=0;i<n;i++)P.push([px[i*4],px[i*4+1],px[i*4+2]]);
+ const D=(a,b)=>2*(a[0]-b[0])**2+4*(a[1]-b[1])**2+3*(a[2]-b[2])**2;
+ const C=[P[Math.floor(Math.random()*n)].slice()],md=new Float64Array(n).fill(1e18);
+ while(C.length<k){let tot=0;const l=C[C.length-1];for(let i=0;i<n;i++){md[i]=Math.min(md[i],D(P[i],l));tot+=md[i]}
+  let r=Math.random()*tot,j=0;for(;j<n-1;j++){r-=md[j];if(r<=0)break}C.push(P[j].slice())}
+ const as=new Int16Array(n);
+ for(let it=0;it<10;it++){const S=C.map(()=>[0,0,0,0]);
+  for(let i=0;i<n;i++){let b=0,bd=1e18;for(let c=0;c<k;c++){const d=D(P[i],C[c]);if(d<bd){bd=d;b=c}}as[i]=b;const s=S[b],p=P[i];s[0]+=p[0];s[1]+=p[1];s[2]+=p[2];s[3]++}
+  S.forEach((s,c)=>{if(s[3])C[c]=[s[0]/s[3],s[1]/s[3],s[2]/s[3]]})}
+ return {C,as}}
+document.getElementById('file').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+ const k=12,S=80,img=new Image(),url=URL.createObjectURL(f);
+ document.getElementById('sub').textContent='図案を作っています…';
+ img.onerror=()=>{document.getElementById('sub').textContent='画像を読み込めませんでした。別のファイルを選んでください。'};
+ img.onload=()=>{URL.revokeObjectURL(url);
+  const L=Math.max(img.width,img.height),w=Math.max(8,Math.round(S*img.width/L)),h=Math.max(8,Math.round(S*img.height/L));
+  const oc=document.createElement('canvas');oc.width=w;oc.height=h;const o=oc.getContext('2d');o.imageSmoothingQuality='high';o.drawImage(img,0,0,w,h);
+  const id=o.getImageData(0,0,w,h),dd=id.data,sa=1.5,ct=1+(sa-1)*.25;
+  for(let i=0;i<dd.length;i+=4){const Y=.299*dd[i]+.587*dd[i+1]+.114*dd[i+2];for(let c=0;c<3;c++){let v=Y+(dd[i+c]-Y)*sa;v=(v-128)*ct+128;dd[i+c]=v<0?0:v>255?255:v}}
+  const q=quant(dd,w*h,k);
+  const pal=q.C.map(c=>'#'+c.map(v=>Math.round(v).toString(16).padStart(2,'0')).join(''));
+  const g=[];for(let y=0;y<h;y++){g.push([]);for(let x=0;x<w;x++)g[y].push(q.as[y*w+x])}
+  smooth(g,w,h,6);
+  const nw={id:'c'+Date.now(),name:f.name.replace(/\.[^.]+$/,'').slice(0,12)||'取り込み',artist:'取り込み',pal,g,gw:w,gh:h};
+  ART.push(nw);DB.custom.push(nw);if(DB.custom.length>5){const o=DB.custom.shift();delete DB.prog[o.id]}persist();
+  const t=addTab(ART.length-1);load(ART.length-1);t.scrollIntoView({inline:'center',block:'nearest'})};
+ img.src=url};
+let DB={custom:[],prog:{},last:null};
+try{const s=localStorage.getItem('meiga-diamond-v1');if(s)DB=Object.assign(DB,JSON.parse(s))}catch(_){}
+function persist(){try{localStorage.setItem('meiga-diamond-v1',JSON.stringify(DB))}catch(_){}}
+let svT;function saveSoon(){clearTimeout(svT);svT=setTimeout(()=>{const a=ART[cur];DB.prog[a.id||a.name]=filled.map(r=>r.map(v=>v?1:0).join('')).join('');DB.last=a.id||a.name;persist()},300)}
+const rs=document.getElementById('rs');let rt;
+rs.onclick=()=>{if(rs.dataset.arm){clearTimeout(rt);delete rs.dataset.arm;rs.textContent='最初からやり直す（2回押すとやり直し）';
+  for(const r of filled)r.fill(false);const a=ART[cur];delete DB.prog[a.id||a.name];persist();upd();draw()}
+ else{rs.dataset.arm=1;rs.textContent='もう一度押すと消えます';rt=setTimeout(()=>{delete rs.dataset.arm;rs.textContent='最初からやり直す（2回押すとやり直し）'},3000)}};
+const dl=document.getElementById('dl'),DL='この図案を削除（2回押すと削除）';let dt;
+dl.onclick=()=>{const a=ART[cur];if(!a.id)return;
+ if(dl.dataset.arm){clearTimeout(dt);delete dl.dataset.arm;dl.textContent=DL;
+  DB.custom=DB.custom.filter(c=>c.id!=a.id);delete DB.prog[a.id];const idx=cur;ART.splice(idx,1);
+  tabs.innerHTML='';ART.forEach((_,i)=>addTab(i));load(Math.max(0,idx-1))}
+ else{dl.dataset.arm=1;dl.textContent='もう一度押すと削除します';dt=setTimeout(()=>{delete dl.dataset.arm;dl.textContent=DL},3000)}};
+DB.custom.forEach(a=>{ART.push(a);addTab(ART.length-1)});
+const li=ART.findIndex(a=>(a.id||a.name)==DB.last);
+load(li>=0?li:0);
+</script>
+</body>
+</html>
